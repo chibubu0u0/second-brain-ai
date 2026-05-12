@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
+import {
+  getOrCreateChat,
+  saveMessage,
+} from "@/lib/chatStorage";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -8,110 +11,6 @@ type ChatMessage = {
 };
 
 export const runtime = "nodejs";
-
-async function getOrCreateWorkspace() {
-  const supabase = createSupabaseAdminClient();
-
-  const { data: existingWorkspace, error: selectError } = await supabase
-    .from("workspaces")
-    .select("id")
-    .eq("name", "Default Workspace")
-    .maybeSingle();
-
-  if (selectError) {
-    throw new Error(selectError.message);
-  }
-
-  if (existingWorkspace?.id) {
-    return existingWorkspace.id;
-  }
-
-  const { data: workspace, error: insertError } = await supabase
-    .from("workspaces")
-    .insert({
-      name: "Default Workspace",
-    })
-    .select("id")
-    .single();
-
-  if (insertError) {
-    throw new Error(insertError.message);
-  }
-
-  return workspace.id;
-}
-
-async function getOrCreateChat({
-  chatId,
-  model,
-  firstUserMessage,
-}: {
-  chatId?: string | null;
-  model: string;
-  firstUserMessage: string;
-}) {
-  const supabase = createSupabaseAdminClient();
-
-  if (chatId) {
-    const { data: existingChat, error } = await supabase
-      .from("chats")
-      .select("id")
-      .eq("id", chatId)
-      .maybeSingle();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (existingChat?.id) {
-      return existingChat.id;
-    }
-  }
-
-  const workspaceId = await getOrCreateWorkspace();
-  const title =
-    firstUserMessage.length > 30
-      ? firstUserMessage.slice(0, 30) + "..."
-      : firstUserMessage || "New Chat";
-
-  const { data: chat, error } = await supabase
-    .from("chats")
-    .insert({
-      workspace_id: workspaceId,
-      title,
-      model,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return chat.id;
-}
-
-async function saveMessage({
-  chatId,
-  role,
-  content,
-}: {
-  chatId: string;
-  role: "user" | "assistant";
-  content: string;
-}) {
-  const supabase = createSupabaseAdminClient();
-
-  const { error } = await supabase.from("messages").insert({
-    chat_id: chatId,
-    role,
-    content,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
 
 export async function POST(request: Request) {
   try {
@@ -165,6 +64,7 @@ export async function POST(request: Request) {
       chatId,
       role: "user",
       content: latestUserMessage.content,
+      messageType: "text",
     });
 
     const openai = new OpenAI({
@@ -192,6 +92,7 @@ export async function POST(request: Request) {
       chatId,
       role: "assistant",
       content: assistantMessage,
+      messageType: "text",
     });
 
     return NextResponse.json({

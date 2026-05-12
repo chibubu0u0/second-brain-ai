@@ -3,20 +3,27 @@
 import { useState } from "react";
 import { MarkdownMessage } from "@/components/MarkdownMessage";
 
+type Mode = "chat" | "image";
+
 type Message = {
   role: "user" | "assistant";
   content: string;
+  messageType?: "text" | "image";
+  imageData?: string | null;
 };
 
 export default function HomePage() {
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<Mode>("chat");
   const [model, setModel] = useState("gpt-4o-mini");
+  const [imageSize, setImageSize] = useState("1024x1024");
   const [chatId, setChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
+      messageType: "text",
       content:
-        "你好，我是你的 Second Brain AI。現在這一版已經可以把新的對話存進 Supabase。",
+        "你好，我是你的 Second Brain AI。現在這一版可以文字聊天，也可以生成圖片，並把結果存進 Supabase。",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -25,12 +32,54 @@ export default function HomePage() {
     const text = input.trim();
     if (!text || loading) return;
 
-    const nextMessages: Message[] = [...messages, { role: "user", content: text }];
+    const userMessage: Message = {
+      role: "user",
+      content: text,
+      messageType: mode === "image" ? "image" : "text",
+    };
+
+    const nextMessages: Message[] = [...messages, userMessage];
     setMessages(nextMessages);
     setInput("");
     setLoading(true);
 
     try {
+      if (mode === "image") {
+        const response = await fetch("/api/image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chatId,
+            prompt: text,
+            size: imageSize,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Image API request failed");
+        }
+
+        if (data.chatId) {
+          setChatId(data.chatId);
+        }
+
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: data.message || "圖片已生成。",
+            messageType: "image",
+            imageData: data.imageData || null,
+          },
+        ]);
+
+        return;
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -46,7 +95,7 @@ export default function HomePage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.error || "API request failed");
+        throw new Error(data?.error || "Chat API request failed");
       }
 
       if (data.chatId) {
@@ -58,6 +107,7 @@ export default function HomePage() {
         {
           role: "assistant",
           content: data.message || "沒有取得回覆。",
+          messageType: "text",
         },
       ]);
     } catch (error) {
@@ -68,6 +118,7 @@ export default function HomePage() {
         ...current,
         {
           role: "assistant",
+          messageType: "text",
           content:
             "目前無法完成請求。請確認 Vercel 的 OPENAI_API_KEY、Supabase URL、anon key、service role key 都已設定。\n\n錯誤訊息：" +
             message,
@@ -83,7 +134,9 @@ export default function HomePage() {
     setMessages([
       {
         role: "assistant",
-        content: "已開始新的對話。這次對話會建立一筆新的 Supabase chat 紀錄。",
+        messageType: "text",
+        content:
+          "已開始新的對話。這次對話會建立一筆新的 Supabase chat 紀錄。",
       },
     ]);
     setInput("");
@@ -102,7 +155,7 @@ export default function HomePage() {
             </h1>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
               className="rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm text-white hover:bg-neutral-800"
               onClick={startNewChat}
@@ -112,12 +165,33 @@ export default function HomePage() {
 
             <select
               className="rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm outline-none"
-              value={model}
-              onChange={(event) => setModel(event.target.value)}
+              value={mode}
+              onChange={(event) => setMode(event.target.value as Mode)}
             >
-              <option value="gpt-4o-mini">GPT-4o mini</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="chat">文字聊天</option>
+              <option value="image">生成圖片</option>
             </select>
+
+            {mode === "chat" ? (
+              <select
+                className="rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm outline-none"
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+              >
+                <option value="gpt-4o-mini">GPT-4o mini</option>
+                <option value="gpt-4o">GPT-4o</option>
+              </select>
+            ) : (
+              <select
+                className="rounded-xl border border-white/10 bg-neutral-900 px-4 py-3 text-sm outline-none"
+                value={imageSize}
+                onChange={(event) => setImageSize(event.target.value)}
+              >
+                <option value="1024x1024">方形 1024×1024</option>
+                <option value="1024x1536">直式 1024×1536</option>
+                <option value="1536x1024">橫式 1536×1024</option>
+              </select>
+            )}
           </div>
         </header>
 
@@ -125,10 +199,17 @@ export default function HomePage() {
           <aside className="rounded-3xl border border-white/10 bg-neutral-900/60 p-5">
             <h2 className="mb-3 text-lg font-medium">Workspace</h2>
             <p className="text-sm leading-6 text-neutral-400">
-              目前會自動建立預設 workspace，並把每次對話存進 Supabase。
+              目前會自動建立預設 workspace，並把文字與圖片生成紀錄存進 Supabase。
             </p>
 
             <div className="mt-6 rounded-2xl bg-black/30 p-4 text-sm text-neutral-300">
+              <p className="font-medium text-white">目前模式</p>
+              <p className="mt-2 text-neutral-400">
+                {mode === "chat" ? "文字聊天" : "生成圖片"}
+              </p>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-black/30 p-4 text-sm text-neutral-300">
               <p className="font-medium text-white">目前 Chat ID</p>
               <p className="mt-2 break-all text-neutral-400">
                 {chatId || "尚未建立，送出第一則訊息後會建立。"}
@@ -138,7 +219,7 @@ export default function HomePage() {
             <div className="mt-4 rounded-2xl bg-black/30 p-4 text-sm text-neutral-300">
               <p className="font-medium text-white">Supabase 狀態</p>
               <p className="mt-2 text-neutral-400">
-                成功送出訊息後，可以到 Supabase Table Editor 查看 messages。
+                成功送出後，可以到 Table Editor → messages 查看紀錄。
               </p>
             </div>
           </aside>
@@ -154,7 +235,23 @@ export default function HomePage() {
                       : "mr-auto max-w-[85%] rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white"
                   }
                 >
-                  {message.role === "assistant" ? (
+                  {message.imageData ? (
+                    <div>
+                      <p className="mb-3 text-sm leading-7">{message.content}</p>
+                      <img
+                        src={message.imageData}
+                        alt={message.content}
+                        className="w-full max-w-xl rounded-2xl border border-white/10"
+                      />
+                      <a
+                        href={message.imageData}
+                        download="second-brain-ai-image.png"
+                        className="mt-3 inline-block rounded-xl bg-white px-4 py-2 text-sm font-medium text-black"
+                      >
+                        下載圖片
+                      </a>
+                    </div>
+                  ) : message.role === "assistant" ? (
                     <MarkdownMessage content={message.content} />
                   ) : (
                     <p className="whitespace-pre-wrap text-sm leading-7">
@@ -166,7 +263,9 @@ export default function HomePage() {
 
               {loading ? (
                 <div className="mr-auto max-w-[85%] rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-neutral-400">
-                  AI 正在思考中...
+                  {mode === "image"
+                    ? "AI 正在生成圖片，可能需要一點時間..."
+                    : "AI 正在思考中..."}
                 </div>
               ) : null}
             </div>
@@ -175,7 +274,11 @@ export default function HomePage() {
               <div className="flex gap-3">
                 <input
                   className="flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none placeholder:text-neutral-500"
-                  placeholder="輸入訊息..."
+                  placeholder={
+                    mode === "image"
+                      ? "描述你想生成的圖片..."
+                      : "輸入訊息..."
+                  }
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {
@@ -189,7 +292,7 @@ export default function HomePage() {
                   onClick={sendMessage}
                   disabled={loading}
                 >
-                  送出
+                  {mode === "image" ? "生成" : "送出"}
                 </button>
               </div>
             </div>

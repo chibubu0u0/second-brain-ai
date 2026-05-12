@@ -1,4 +1,4 @@
--- Second Brain AI Supabase Schema
+-- Second Brain AI Text + Image Schema
 -- Run this in Supabase SQL Editor.
 
 create table if not exists workspaces (
@@ -24,9 +24,19 @@ create table if not exists messages (
   created_at timestamp with time zone default now()
 );
 
+alter table messages
+add column if not exists message_type text not null default 'text';
+
+alter table messages
+add column if not exists image_data text;
+
+alter table messages
+add column if not exists image_mime text;
+
 create index if not exists chats_workspace_id_idx on chats(workspace_id);
 create index if not exists messages_chat_id_idx on messages(chat_id);
 create index if not exists messages_created_at_idx on messages(created_at);
+create index if not exists messages_message_type_idx on messages(message_type);
 
 -- MVP 階段先不開 RLS，讓 server route 可以快速寫入。
 -- 正式多人產品上線前，建議加入 Supabase Auth + RLS policies。
