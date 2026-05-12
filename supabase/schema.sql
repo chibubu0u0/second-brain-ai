@@ -1,4 +1,4 @@
--- Second Brain Clean V1 Schema
+-- Second Brain v1.1.0 AI Memory Organizer Schema
 -- Run this in Supabase SQL Editor.
 
 create table if not exists workspaces (
@@ -33,6 +33,17 @@ create table if not exists messages (
   role text not null check (role in ('user', 'assistant', 'system')),
   content text not null,
   model text,
+  created_at timestamp with time zone default now()
+);
+
+create table if not exists memories (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid references projects(id) on delete cascade,
+  source_chat_id uuid references chats(id) on delete set null,
+  title text not null,
+  content text not null,
+  memory_type text not null default 'insight',
+  importance text not null default 'medium' check (importance in ('low', 'medium', 'high')),
   created_at timestamp with time zone default now()
 );
 
@@ -71,21 +82,28 @@ create table if not exists assets (
   created_at timestamp with time zone default now()
 );
 
+-- Safe migration for v1.0.0 tables
+alter table decisions add column if not exists related_chat_id uuid references chats(id) on delete set null;
+alter table memories add column if not exists source_chat_id uuid references chats(id) on delete set null;
+
 create index if not exists projects_workspace_id_idx on projects(workspace_id);
 create index if not exists chats_project_id_idx on chats(project_id);
 create index if not exists messages_chat_id_idx on messages(chat_id);
 create index if not exists messages_created_at_idx on messages(created_at);
+create index if not exists memories_project_id_idx on memories(project_id);
+create index if not exists memories_source_chat_id_idx on memories(source_chat_id);
+create index if not exists memories_memory_type_idx on memories(memory_type);
 create index if not exists decisions_project_id_idx on decisions(project_id);
 create index if not exists tasks_project_id_idx on tasks(project_id);
 create index if not exists assets_project_id_idx on assets(project_id);
 
--- Clean V1 暫時不開 RLS，讓 Vercel server route 可以快速寫入。
--- 正式多人產品上線前，下一步應該加入：
+-- v1.1.0 仍先不開 RLS，維持開發速度。
+-- 正式多人產品上線前，下一步應加入：
 -- 1. Supabase Auth
 -- 2. workspace_members
 -- 3. Row Level Security policies
 
--- Future AI Memory:
+-- Future AI Memory Search:
 -- create extension if not exists vector;
+-- alter table memories add column if not exists embedding vector(1536);
 -- alter table messages add column if not exists embedding vector(1536);
--- create table memories (...);

@@ -1,17 +1,15 @@
-# Second Brain Clean V1
+# Second Brain v1.1.0 — AI Memory Organizer
 
-這是「以專案為核心」的 AI 第二大腦 Clean V1。
+這是 v1.1.0：AI 自動整理專案記憶版本。
 
-## 這一版做什麼？
+## 新增功能
 
-- Project 為核心
-- 每個 Project 有自己的 Chat
-- 對話會存進 Supabase
-- 右側有 Memory 面板：Decisions / Tasks / Assets metadata
-- 先不做圖片生成
-- 先不接 Google Cloud Storage
-- 先不做 Auth / RLS
-- 先把「專案執行紀錄」架構打穩
+- 保留 v1.0.0 的 Project / Chat / Message / Decision / Task / Asset 架構
+- 新增 `memories` table
+- 右側新增「整理本次對話」按鈕
+- AI 會把目前 chat 整理成：Summary、Memories、Decisions、Tasks
+- 整理結果會自動寫入 Supabase
+- 右側會顯示 Memories / Decisions / Tasks / Assets
 
 ## Environment Variables
 
@@ -28,29 +26,22 @@ SUPABASE_SERVICE_ROLE_KEY=
 
 到 Supabase → SQL Editor → New Query，貼上 `supabase/schema.sql` 並執行。
 
-## 本機開發
+如果你已經有 v1.0.0 的資料表，這份 SQL 可以直接執行，會新增 `memories` table 與必要欄位/index。
 
-```bash
-npm install
-npm run dev
-```
+## Deploy
 
-## 部署
+1. 解壓縮 ZIP
+2. 上傳到 GitHub repo 根目錄
+3. Vercel 自動部署
+4. 確認 Environment Variables
+5. 執行 Supabase SQL
+6. 測試「整理本次對話」
 
-1. 上傳到 GitHub
-2. Vercel import repo
-3. 設定 Environment Variables
-4. Deploy
+## Version
 
-## 資料結構
+部署成功後建議建立 GitHub Release：
 
 ```txt
-Project
-  ├── Chats
-  │     └── Messages
-  ├── Decisions
-  ├── Tasks
-  └── Assets
+v1.1.0
+AI Memory Organizer
 ```
-
-下一階段再加入 Supabase Auth、Google Cloud Storage、Embedding / Semantic Search。
