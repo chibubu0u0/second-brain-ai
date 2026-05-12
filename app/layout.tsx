@@ -1,17 +1,18 @@
+import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "Second Brain AI",
-  description: "Shared AI Memory Workspace"
+  description: "Shared AI memory workspace",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
-    <html lang="en">
+    <html lang="zh-Hant">
       <body>{children}</body>
     </html>
   );
