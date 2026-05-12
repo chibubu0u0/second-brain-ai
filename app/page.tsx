@@ -45,9 +45,7 @@ export default function HomePage() {
       if (data.chatId) setSelectedChatId(data.chatId);
       setMessages((cur) => [...cur, { role: "assistant", content: data.message, model: selectedModel }]);
       await loadProjectData(selectedProjectId); if (data.chatId) await loadMessages(data.chatId);
-    } catch (e) { const msg = e instanceof Error ? e.message : "Unknown error"; setMessages((cur) => [...cur, { role: "assistant", content: "目前無法完成請求。請確認 Vercel Environment Variables 與 Supabase schema 都已設定。
-
-錯誤訊息：" + msg }]); } finally { setLoading(false); }
+    } catch (e) { const msg = e instanceof Error ? e.message : "Unknown error"; setMessages((cur) => [...cur, { role: "assistant", content: `目前無法完成請求。請確認 Vercel Environment Variables 與 Supabase schema 都已設定。\n\n錯誤訊息：${msg}` }]); } finally { setLoading(false); }
   }
   async function addDecision() { if (!selectedProjectId) return; const title = window.prompt("這次決策是什麼？"); if (!title) return; const reason = window.prompt("為什麼這樣決定？可留空") || ""; const res = await fetch("/api/decisions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: selectedProjectId, title, reason }) }); if (res.ok) await loadProjectData(selectedProjectId); }
   async function addTask() { if (!selectedProjectId) return; const title = window.prompt("新增待辦事項"); if (!title) return; const res = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: selectedProjectId, title }) }); if (res.ok) await loadProjectData(selectedProjectId); }
