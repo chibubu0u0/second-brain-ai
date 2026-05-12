@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -8,11 +9,115 @@ type ChatMessage = {
 
 export const runtime = "nodejs";
 
+async function getOrCreateWorkspace() {
+  const supabase = createSupabaseAdminClient();
+
+  const { data: existingWorkspace, error: selectError } = await supabase
+    .from("workspaces")
+    .select("id")
+    .eq("name", "Default Workspace")
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(selectError.message);
+  }
+
+  if (existingWorkspace?.id) {
+    return existingWorkspace.id;
+  }
+
+  const { data: workspace, error: insertError } = await supabase
+    .from("workspaces")
+    .insert({
+      name: "Default Workspace",
+    })
+    .select("id")
+    .single();
+
+  if (insertError) {
+    throw new Error(insertError.message);
+  }
+
+  return workspace.id;
+}
+
+async function getOrCreateChat({
+  chatId,
+  model,
+  firstUserMessage,
+}: {
+  chatId?: string | null;
+  model: string;
+  firstUserMessage: string;
+}) {
+  const supabase = createSupabaseAdminClient();
+
+  if (chatId) {
+    const { data: existingChat, error } = await supabase
+      .from("chats")
+      .select("id")
+      .eq("id", chatId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (existingChat?.id) {
+      return existingChat.id;
+    }
+  }
+
+  const workspaceId = await getOrCreateWorkspace();
+  const title =
+    firstUserMessage.length > 30
+      ? firstUserMessage.slice(0, 30) + "..."
+      : firstUserMessage || "New Chat";
+
+  const { data: chat, error } = await supabase
+    .from("chats")
+    .insert({
+      workspace_id: workspaceId,
+      title,
+      model,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return chat.id;
+}
+
+async function saveMessage({
+  chatId,
+  role,
+  content,
+}: {
+  chatId: string;
+  role: "user" | "assistant";
+  content: string;
+}) {
+  const supabase = createSupabaseAdminClient();
+
+  const { error } = await supabase.from("messages").insert({
+    chat_id: chatId,
+    role,
+    content,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const openaiApiKey = process.env.OPENAI_API_KEY;
 
-    if (!apiKey) {
+    if (!openaiApiKey) {
       return NextResponse.json(
         {
           error:
@@ -24,6 +129,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const model = typeof body.model === "string" ? body.model : "gpt-4o-mini";
+    const requestedChatId =
+      typeof body.chatId === "string" ? body.chatId : null;
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
     const safeMessages = messages
@@ -37,8 +144,31 @@ export async function POST(request: Request) {
         content: message.content,
       }));
 
+    const latestUserMessage = [...safeMessages]
+      .reverse()
+      .find((message) => message.role === "user");
+
+    if (!latestUserMessage) {
+      return NextResponse.json(
+        { error: "No user message found." },
+        { status: 400 }
+      );
+    }
+
+    const chatId = await getOrCreateChat({
+      chatId: requestedChatId,
+      model,
+      firstUserMessage: latestUserMessage.content,
+    });
+
+    await saveMessage({
+      chatId,
+      role: "user",
+      content: latestUserMessage.content,
+    });
+
     const openai = new OpenAI({
-      apiKey,
+      apiKey: openaiApiKey,
     });
 
     const completion = await openai.chat.completions.create({
@@ -47,18 +177,27 @@ export async function POST(request: Request) {
         {
           role: "system",
           content:
-            "You are the AI assistant inside a shared second brain workspace. Answer clearly and help organize knowledge.",
+            "你是 Second Brain AI 裡的團隊知識助理。請用繁體中文回答。回答要乾淨、易讀、有結構。除非使用者明確要求程式碼，否則不要輸出程式碼區塊。可以使用標題與條列，但避免過度使用 Markdown 原始符號。",
         },
         ...safeMessages,
       ],
       temperature: 0.7,
     });
 
-    const message =
+    const assistantMessage =
       completion.choices[0]?.message?.content ||
-      "I could not generate a response.";
+      "我目前無法產生回覆。";
 
-    return NextResponse.json({ message });
+    await saveMessage({
+      chatId,
+      role: "assistant",
+      content: assistantMessage,
+    });
+
+    return NextResponse.json({
+      chatId,
+      message: assistantMessage,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown server error";

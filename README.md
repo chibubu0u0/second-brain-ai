@@ -1,69 +1,63 @@
-# Second Brain AI
+# Second Brain AI — Supabase Saved Chat Version
 
-一個可以部署到 GitHub + Vercel 的多人 AI 第二大腦 MVP starter。
+這一版已經升級成：
 
-## 功能
+- 可以呼叫 OpenAI
+- 可以把對話存進 Supabase
+- 可以自動建立 workspace / chat
+- 可以把 user 與 assistant 訊息寫入 messages
+- AI 回覆會用 Markdown 正確渲染，不會再直接顯示 `###`、`**` 這類原始格式
 
-- Next.js App Router
-- TailwindCSS
-- Supabase schema
-- OpenAI API route
-- 基本聊天介面
-- 可直接部署到 Vercel
-- 後續可擴充 Claude / Gemini / Workspace / Auth / Memory
-
-## 1. 安裝
+## Quick Start
 
 ```bash
 npm install
 npm run dev
 ```
 
-本機開啟：
+## Environment Variables
 
-```txt
-http://localhost:3000
-```
-
-## 2. 環境變數
-
-複製 `.env.example` 成 `.env.local`
-
-```bash
-cp .env.example .env.local
-```
-
-填入：
+請在 Vercel 裡設定：
 
 ```env
+OPENAI_API_KEY=
+
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-OPENAI_API_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-> Claude / Gemini 可以之後再加。這一版先讓 Vercel 穩定部署成功。
+> `NEXT_PUBLIC_SUPABASE_ANON_KEY` 用 publish / anon key。  
+> `SUPABASE_SERVICE_ROLE_KEY` 用 secret / service_role key，只能放在 Vercel 後端環境變數，不可以放到前端公開。
 
-## 3. Supabase
+## Supabase SQL
 
-到 Supabase 的 SQL Editor，貼上：
+到 Supabase：
 
-```sql
--- supabase/schema.sql
-```
+SQL Editor → New Query
 
-或直接打開 `supabase/schema.sql` 複製內容執行。
+貼上 `supabase/schema.sql` 的內容並執行。
 
-## 4. Vercel 部署
+## GitHub / Vercel
 
-1. 上傳到 GitHub
-2. 到 Vercel import 這個 repo
-3. 加入 Environment Variables
-4. Deploy
+1. 解壓縮 ZIP
+2. 把資料夾內所有檔案上傳到 GitHub
+3. Vercel 會自動重新部署
+4. 到 Vercel Environment Variables 補上上面的 key
+5. Redeploy
 
-## 5. 後續建議開發順序
+## Database Tables
 
-1. Supabase Auth
-2. Chat history 儲存
-3. Workspace / Team
-4. Claude / Gemini model router
-5. Embedding / semantic search
+- workspaces
+- chats
+- messages
+
+## Next Step
+
+下一版可以做：
+
+- 左側聊天歷史紀錄
+- Supabase Auth 登入
+- Team workspace
+- Claude / Gemini 模型切換
+- Embedding / AI Memory
